@@ -22,19 +22,19 @@ from singer import (transform,
                     Transformer, _transform_datetime)
 from singer.catalog import Catalog, CatalogEntry
 
-from facebookads import FacebookAdsApi
-import facebookads.adobjects.adcreative as adcreative
-import facebookads.adobjects.ad as fb_ad
-import facebookads.adobjects.adset as adset
-import facebookads.adobjects.campaign as fb_campaign
-import facebookads.adobjects.adsinsights as adsinsights
-import facebookads.adobjects.user as fb_user
+from facebook_business import FacebookAdsApi
+import facebook_business.adobjects.adcreative as adcreative
+import facebook_business.adobjects.ad as fb_ad
+import facebook_business.adobjects.adset as adset
+import facebook_business.adobjects.campaign as fb_campaign
+import facebook_business.adobjects.adsinsights as adsinsights
+import facebook_business.adobjects.user as fb_user
 
-from facebookads.exceptions import FacebookRequestError
+from facebook_business.exceptions import FacebookRequestError
 
 TODAY = pendulum.today()
 
-INSIGHTS_MAX_WAIT_TO_START_SECONDS = 5 * 60
+INSIGHTS_MAX_WAIT_TO_START_SECONDS = 2 * 60
 INSIGHTS_MAX_WAIT_TO_FINISH_SECONDS = 30 * 60
 INSIGHTS_MAX_ASYNC_SLEEP_SECONDS = 5 * 60
 
@@ -112,7 +112,7 @@ def retry_pattern(backoff_type, exception, **wait_gen_kwargs):
 
     def should_retry_api_error(exception):
         if isinstance(exception, FacebookRequestError):
-            return exception.api_transient_error()
+            return exception.api_transient_error() or exception.api_error_subcode() == 99
         elif isinstance(exception, InsightsJobTimeout):
             return True
         return False
@@ -164,21 +164,22 @@ class IncrementalStream(Stream):
     def __attrs_post_init__(self):
         self.current_bookmark = get_start(self, UPDATED_TIME_KEY)
 
-    def _iterate(self, recordset, record_preparation):
+    def _iterate(self, generator, record_preparation):
         max_bookmark = None
-        for record in recordset:
-            updated_at = pendulum.parse(record[UPDATED_TIME_KEY])
+        for recordset in generator:
+            for record in recordset:
+                updated_at = pendulum.parse(record[UPDATED_TIME_KEY])
 
-            if self.current_bookmark and self.current_bookmark >= updated_at:
-                continue
-            if not max_bookmark or updated_at > max_bookmark:
-                max_bookmark = updated_at
+                if self.current_bookmark and self.current_bookmark >= updated_at:
+                    continue
+                if not max_bookmark or updated_at > max_bookmark:
+                    max_bookmark = updated_at
 
-            record = record_preparation(record)
-            yield {'record': record}
+                record = record_preparation(record)
+                yield {'record': record}
 
-        if max_bookmark:
-            yield {'state': advance_bookmark(self, UPDATED_TIME_KEY, str(max_bookmark))}
+            if max_bookmark:
+                yield {'state': advance_bookmark(self, UPDATED_TIME_KEY, str(max_bookmark))}
 
 class AdCreative(Stream):
     '''
@@ -212,8 +213,7 @@ class Ads(IncrementalStream):
             params = {'limit': RESULT_RETURN_LIMIT}
             if self.current_bookmark:
                 params.update({'filtering': [{'field': 'ad.' + UPDATED_TIME_KEY, 'operator': 'GREATER_THAN', 'value': self.current_bookmark.int_timestamp}]})
-            ads =  self.account.get_ads(fields=self.automatic_fields(), params=params) # pylint: disable=no-member
-            return ads
+            yield self.account.get_ads(fields=self.automatic_fields(), params=params) # pylint: disable=no-member
 
         @retry_pattern(backoff.expo, FacebookRequestError, max_tries=5, factor=5)
         def do_request_multiple():
@@ -221,13 +221,12 @@ class Ads(IncrementalStream):
             bookmark_params = []
             if self.current_bookmark:
                 bookmark_params.append({'field': 'ad.' + UPDATED_TIME_KEY, 'operator': 'GREATER_THAN', 'value': self.current_bookmark.int_timestamp})
-            ads = []
             for del_info_filt in iter_delivery_info_filter('ad'):
                 params.update({'filtering': [del_info_filt] + bookmark_params})
                 filt_ads = self.account.get_ads(fields=self.automatic_fields(), params=params) # pylint: disable=no-member
-                ads.extend(filt_ads)
-            return ads
+                yield filt_ads
 
+        @retry_pattern(backoff.expo, FacebookRequestError, max_tries=5, factor=5)
         def prepare_record(ad):
             return ad.remote_read(fields=self.fields()).export_all_data()
 
@@ -253,8 +252,7 @@ class AdSets(IncrementalStream):
             params = {'limit': RESULT_RETURN_LIMIT}
             if self.current_bookmark:
                 params.update({'filtering': [{'field': 'adset.' + UPDATED_TIME_KEY, 'operator': 'GREATER_THAN', 'value': self.current_bookmark.int_timestamp}]})
-            adsets =  self.account.get_ad_sets(fields=self.automatic_fields(), params=params) # pylint: disable=no-member
-            return adsets
+            yield self.account.get_ad_sets(fields=self.automatic_fields(), params=params) # pylint: disable=no-member
 
         @retry_pattern(backoff.expo, FacebookRequestError, max_tries=5, factor=5)
         def do_request_multiple():
@@ -262,13 +260,12 @@ class AdSets(IncrementalStream):
             bookmark_params = []
             if self.current_bookmark:
                 bookmark_params.append({'field': 'adset.' + UPDATED_TIME_KEY, 'operator': 'GREATER_THAN', 'value': self.current_bookmark.int_timestamp})
-            adsets = []
             for del_info_filt in iter_delivery_info_filter('adset'):
                 params.update({'filtering': [del_info_filt] + bookmark_params})
                 filt_adsets = self.account.get_ad_sets(fields=self.automatic_fields(), params=params) # pylint: disable=no-member
-                adsets.extend(filt_adsets)
-            return adsets
+                yield filt_adsets
 
+        @retry_pattern(backoff.expo, FacebookRequestError, max_tries=5, factor=5)
         def prepare_record(ad_set):
             return ad_set.remote_read(fields=self.fields()).export_all_data()
 
@@ -295,8 +292,7 @@ class Campaigns(IncrementalStream):
             params = {'limit': RESULT_RETURN_LIMIT}
             if self.current_bookmark:
                 params.update({'filtering': [{'field': 'campaign.' + UPDATED_TIME_KEY, 'operator': 'GREATER_THAN', 'value': self.current_bookmark.int_timestamp}]})
-            campaigns =  self.account.get_campaigns(fields=self.automatic_fields(), params=params) # pylint: disable=no-member
-            return campaigns
+            yield self.account.get_campaigns(fields=self.automatic_fields(), params=params) # pylint: disable=no-member
 
         @retry_pattern(backoff.expo, FacebookRequestError, max_tries=5, factor=5)
         def do_request_multiple():
@@ -304,13 +300,12 @@ class Campaigns(IncrementalStream):
             bookmark_params = []
             if self.current_bookmark:
                 bookmark_params.append({'field': 'campaign.' + UPDATED_TIME_KEY, 'operator': 'GREATER_THAN', 'value': self.current_bookmark.int_timestamp})
-            campaigns = []
             for del_info_filt in iter_delivery_info_filter('campaign'):
                 params.update({'filtering': [del_info_filt] + bookmark_params})
                 filt_campaigns = self.account.get_campaigns(fields=self.automatic_fields(), params=params) # pylint: disable=no-member
-                campaigns.extend(filt_campaigns)
-            return campaigns
+                yield filt_campaigns
 
+        @retry_pattern(backoff.expo, FacebookRequestError, max_tries=5, factor=5)
         def prepare_record(campaign):
             campaign_out = campaign.remote_read(fields=fields).export_all_data()
             if pull_ads:
@@ -583,7 +578,7 @@ def load_schema(stream):
         else:
             if k not in field_class.__dict__:
                 LOGGER.warning(
-                    'Property %s.%s is not defined in the facebookads library',
+                    'Property %s.%s is not defined in the facebook_business library',
                     stream.name, k)
             schema['properties'][k]['inclusion'] = 'available'
 

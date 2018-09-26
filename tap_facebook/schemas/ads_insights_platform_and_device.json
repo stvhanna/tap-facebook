@@ -7,6 +7,7 @@
     "unique_actions": {"$ref": "ads_action_stats.json"},
     "actions": {"$ref": "ads_action_stats.json"},
     "action_values": {"$ref": "ads_action_stats.json"},
+    "outbound_clicks": {"$ref": "ads_action_stats.json"},
     "video_10_sec_watched_actions": {"$ref": "ads_action_stats.json"},
     "video_30_sec_watched_actions": {"$ref": "ads_action_stats.json"},
     "video_p25_watched_actions": {"$ref": "ads_action_stats.json"},
@@ -107,12 +108,6 @@
         "number"
       ]
     },
-    "total_actions": {
-      "type": [
-        "null",
-        "integer"
-      ]
-    },
     "account_name": {
       "type": [
         "null",
@@ -157,12 +152,6 @@
         }
       }
     },
-    "social_reach": {
-      "type": [
-        "null",
-        "integer"
-      ]
-    },
     "inline_post_engagement": {
       "type": [
         "null",
@@ -186,26 +175,8 @@
             "null",
             "string"
           ]
-        },
-        "positive_feedback": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "negative_feedback": {
-          "type": [
-            "null",
-            "string"
-          ]
         }
       }
-    },
-    "social_clicks": {
-      "type": [
-        "null",
-        "integer"
-      ]
     },
     "campaign_name": {
       "type": [
@@ -225,25 +196,7 @@
         "string"
       ]
     },
-    "unique_social_clicks": {
-      "type": [
-        "null",
-        "integer"
-      ]
-    },
     "cpc": {
-      "type": [
-        "null",
-        "number"
-      ]
-    },
-    "call_to_action_clicks": {
-      "type": [
-        "null",
-        "integer"
-      ]
-    },
-    "cost_per_total_action": {
       "type": [
         "null",
         "number"
@@ -317,12 +270,6 @@
         "number"
       ]
     },
-    "social_reach": {
-      "type": [
-        "null",
-        "integer"
-      ]
-    },
     "spend": {
       "type": [
         "null",
@@ -384,12 +331,6 @@
       ],
       "format": "date-time"
     },
-    "social_impressions": {
-      "type": [
-        "null",
-        "integer"
-      ]
-    },
     "objective": {
       "type": [
         "null",
@@ -421,12 +362,6 @@
       ]
     },
     "reach": {
-      "type": [
-        "null",
-        "integer"
-      ]
-    },
-    "total_unique_actions": {
       "type": [
         "null",
         "integer"
